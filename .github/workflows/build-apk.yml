@@ -1,0 +1,63 @@
+name: Build NEURO CLOCK APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'NeuroClockAndroid_project_v2.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and unpack project archive
+        run: |
+          ARCHIVE="NeuroClockAndroid_project_v2.zip"
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "Upload NeuroClockAndroid_project_v2.zip to the root of this repository first."
+            exit 1
+          fi
+          mkdir project-unpacked
+          unzip -q "$ARCHIVE" -d project-unpacked
+          PROJECT_DIR="$(find project-unpacked -type f -name settings.gradle -printf '%h\n' | head -n 1)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Could not find settings.gradle in the ZIP archive."
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEURO-CLOCK-APK
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
